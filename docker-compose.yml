@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  traefik:
+    restart: always
+    image: traefik:v3.0
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  frontend:
+    image: node:22
+    working_dir: /usr/src/app
+    volumes:
+      - ./apps/frontend:/usr/src/app
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.rule=Host(`totti.localhost`)
+      - traefik.http.routers.frontend.entrypoints=web
+      - traefik.http.services.frontend.loadbalancer.server.port=5173
+    command: npm run dev -- --host
+
+  backend:
+    image: node:22
+    working_dir: /apps
+    volumes:
+      - ./apps/backend:/apps
+    command: npm run start
+    environment:
+      - NODE_ENV=development
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.backend.rule=Host(`api.totti.localhost`)
+      - traefik.http.routers.backend.entrypoints=web
+      - traefik.http.services.backend.loadbalancer.server.port=3000
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: "root"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.phpmyadmin.rule=Host(`phpmyadmin.totti.localhost`)
+      - traefik.http.routers.phpmyadmin.entrypoints=web
+
+volumes:
+  mysql_data:
